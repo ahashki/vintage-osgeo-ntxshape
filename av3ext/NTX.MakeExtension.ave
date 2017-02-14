@@ -1,0 +1,149 @@
+' * The contents of this file are subject to the Mozilla Public License 
+' * Version 1.1 (the "License"); you may not use this file except in 
+' * compliance with the License. You may obtain a copy of the License at
+' * http://www.mozilla.org/MPL/
+' * 
+' * Software distributed under the License is distributed on an "AS IS" 
+' * basis, WITHOUT WARRANTY OF ANY KIND, either express or implied. See 
+' * the License for the specific language governing rights and limitations 
+' * under the License.
+' * 
+' * The Original Code is NTXShape - NTX to Shapefile Converter.
+' * 
+' * The Initial Developer of the Original Code is ESRI Canada Limited.
+' * Portions created by ESRI Canada are Copyright (C) 1997-2003 
+' * ESRI Canada Limited.  All Rights Reserved.
+' * 
+' * Contributor(s):
+' *  Bruce Dodson <bdodson@esricanada.com>
+
+
+'------------------------------
+ 'the Filename of the extension
+ '
+
+theExtensionFile = av.GetProject.GetFileName.ReturnDir
+theExtensionFile.MergeFile("ntxshape.avx")
+
+'------------------------------
+ 'The Name of the extension to be displayed in the
+ 'extension dialog
+theExtensionName = "NTXShape Converter"
+
+'------------------------------
+ 'The description of the extension to be displayed
+ ' in the extension dialog
+ 
+theDescription = (
+  "The NTXShape Converter translates information stored "+
+  "in Universal Systems Limited (USL) CARIS NTX file format to ESRI's "+
+  "Shapefile format.  (v1.4a)  NTXShape is open source software.  "+
+  "For more information, see: http://ntxshape.sourceforge.net/."
+)
+
+'------------------------------
+ 'The version of the extension
+theVersion = 14
+
+'------------------------------
+ 'Install Script
+InScriptName="NTX.Install"
+
+'------------------------------
+ 'Uninstall Script
+
+UnScriptName="NTX.Uninstall"
+
+
+
+'------------------------------
+ 'The scripts to include
+
+theScriptNames={
+  "NTX.Convert",
+  "NTX.ConvertImp",
+  "NTX.Annotate",
+  "NTX.AnnotateUpdate",
+  "NTX.WriteAnnotationDXF"
+}
+
+theScripts = List.Make
+for each scrNm in theScriptNames
+  theScript = av.GetProject.FindScript(scrNm)
+  if (theScript=nil) then
+    MsgBox.Error("The script"++scrNm.Quote++"was not found","Script not found")
+    return nil
+  end
+  theScripts.Add(theScript)
+end
+
+
+importChc = Choice.Make
+importChc.SetLabel("Import NTX...")
+importChc.SetClick("NTX.Convert")
+
+
+annoChc = Choice.Make
+annoChc.SetLabel("Annotate NTX")
+annoChc.SetClick("NTX.Annotate")
+annoChc.SetUpdate("NTX.AnnotateUpdate")
+
+annoDxfChc = Choice.Make
+annoDxfChc.SetLabel("Export NTX Annotation...")
+annoDxfChc.SetClick("NTX.WriteAnnotationDxf")
+annoDxfChc.SetUpdate("NTX.AnnotateUpdate")
+
+' theChoices is a list of GUI descriptions
+' A GUI description is a GUI name and a list of menu descriptions
+' A Menu description is a menu name and a list of choice descriptions
+' A Choice description is a choice and the name of the choice it follows.
+
+theChoices = {
+  { "View", {
+    { "View",  { { importChc,  "Add Theme..."  } } },
+    { "Theme", { { annoChc,    "Auto-label..." } } },
+    { "Theme", { { annoDxfChc, "Convert to Shapefile..."  } } }
+  } }
+}
+
+
+
+'------------------------------
+ 'The  Dependencies.
+theDependencies={}
+
+ 
+theInstall=av.GetProject.FindScript(InscriptName)
+if (theInstall=NIL) then 
+  Msgbox.Error("The install Script "+InScriptName+" was not found","Script not found")
+  return(nil)
+end
+
+
+theUninstall=av.GetProject.FindScript(unscriptName)
+if (theUninstall=NIL) then 
+  Msgbox.Error("The install Script "+UnScriptName+" was not found","Script not found")
+  return(nil)
+end
+
+'Create the extension
+' Extension.Make(ExtensionFile, theExtensionName, InstallScript, UninstallScript, Dependancies_
+
+ntxExt = Extension.Make(theExtensionFile, 
+              theExtensionName,
+              theInstall,
+              theUninstall,              
+              theDependencies)
+
+ntxExt.Add(theChoices)
+
+for each scr in theScripts
+  ntxExt.Add(scr)
+end
+
+ntxExt.SetAbout(theDescription)
+ntxExt.SetExtVersion(theVersion)  'version info is broken
+
+ntxExt.Commit
+
+'File.Copy(theExtensionFile,"$AVEXT/ntxshape.avx".AsFileName)

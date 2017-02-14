@@ -1,0 +1,189 @@
+' * The contents of this file are subject to the Mozilla Public License 
+' * Version 1.1 (the "License"); you may not use this file except in 
+' * compliance with the License. You may obtain a copy of the License at
+' * http://www.mozilla.org/MPL/
+' * 
+' * Software distributed under the License is distributed on an "AS IS" 
+' * basis, WITHOUT WARRANTY OF ANY KIND, either express or implied. See 
+' * the License for the specific language governing rights and limitations 
+' * under the License.
+' * 
+' * The Original Code is NTXShape - NTX to Shapefile Converter.
+' * 
+' * The Initial Developer of the Original Code is ESRI Canada Limited.
+' * Portions created by ESRI Canada are Copyright (C) 1997-2003 
+' * ESRI Canada Limited.  All Rights Reserved.
+' * 
+' * Contributor(s):
+' *  Bruce Dodson <bdodson@esricanada.com>
+
+' NTX.ConvertImp
+' This is broken into a separate script to close a potential memory leak:
+' If this script crashes for some reason, control will return to NTX.Convert.
+' NTX.Convert can then release the NTX file.
+
+
+' Changed so descriptor table isn't written.
+' Interface needs work, because user still chooses the "base" filename
+' which used to be meaningful because of descriptor table.
+
+ntx = Self.Get(0)
+ntxFNm = Self.Get(1)
+ntxDLL = Self.Get(2)
+
+
+
+'These are what are returned.  Initialize to Nil in case of errors
+dscTab = Nil
+pntTab = Nil
+linTab = Nil
+plyTab = Nil
+
+' The functions used in the conversion process
+
+'TransDesc = DLLProc.Make(ntxDLL,"NTXConvertDescriptors",#DLLPROC_TYPE_INT32,{#DLLPROC_TYPE_PINT32,#DLLPROC_TYPE_STR,#DLLPROC_TYPE_INT32,#DLLPROC_TYPE_INT32})
+TransPoints = DLLProc.Make(ntxDLL,"NTXConvertPoints",#DLLPROC_TYPE_INT32,{#DLLPROC_TYPE_PINT32,#DLLPROC_TYPE_STR,#DLLPROC_TYPE_INT32,#DLLPROC_TYPE_INT32})
+TransLines = DLLProc.Make(ntxDLL,"NTXConvertLines",#DLLPROC_TYPE_INT32,{#DLLPROC_TYPE_PINT32,#DLLPROC_TYPE_STR,#DLLPROC_TYPE_INT32,#DLLPROC_TYPE_INT32})
+TransPolys = DLLProc.Make(ntxDLL,"NTXConvertPolygons",#DLLPROC_TYPE_INT32,{#DLLPROC_TYPE_PINT32,#DLLPROC_TYPE_STR,#DLLPROC_TYPE_INT32,#DLLPROC_TYPE_INT32})
+'TransNames = DLLProc.Make(ntxDLL,"NTXConvertNames",#DLLPROC_TYPE_INT32,{#DLLPROC_TYPE_PINT32,#DLLPROC_TYPE_STR,#DLLPROC_TYPE_INT32,#DLLPROC_TYPE_INT32})
+
+'doAll = "All Files"
+doPoint = "Point Shapefile"
+doLine = "Line Shapefile"
+doPoly = "Polygon Shapefile"
+
+
+
+' And then we got rid of the msgbox altogether
+outTypes = { doPoint, doLine , doPoly }
+
+
+outputType = doPoint
+
+outFNm = ntxFNm.Clone
+
+outFNm.SetExtension("")
+outDir = outFNm.ReturnDir.AsString
+outBase = outFNm.GetBaseName.BasicTrim("",".")
+
+if (System.GetOSVariant <> #SYSTEM_OSVARIANT_MSW16) then
+  outBase = outBase+"_"
+else
+  outBase = outBase.Left(7)
+end
+
+
+keepGoing = true
+
+pntFNm = FileName.Merge(outDir, outBase + "p.shp")
+pntFNm = FileDialog.Put(pntFNm,"*.shp","Save Point Shapefile As...")
+if (pntFNm <> nil) then
+  'if (outputType = doPoint) then
+  
+  av.ShowMsg("Converting points to "+pntFNm.GetBaseName + "...")
+  av.SetStatus(0)
+  
+  outfile = pntFNm.AsString
+  status = TransPoints.Call({ntx,outfile,0,1})
+  av.SetStatus(100)
+  
+  if (status=0) then
+    pntSrc = SrcName.Make(pntFNm.AsString)
+    if (pntSrc <> nil) then
+      pntTab = FTab.Make(SrcName.Make(pntFNm.AsString))
+      if (pntTab.HasError) then
+        pntTab = nil
+        av.PurgeObjects
+      end
+    end
+  end
+  
+  if (pntTab = nil) then
+    for each ext in {"shp","dbf","shx"}
+      pntFNm.SetExtension(ext)
+      File.Delete(pntFNm)
+    end
+    if (MsgBox.YesNo("Could not convert points, or no points were present.  Continue?","NTXShape Error!",true).Not) then
+      keepGoing = false
+    end
+  end
+end
+
+
+if (keepGoing) then
+
+  linFNm = FileName.Merge(outDir, outBase + "l.shp")
+  linFNm = FileDialog.Put(linFNm,"*.shp","Save Line Shapefile As...")
+  if (linFNm <> nil) then
+    av.ShowMsg("Converting lines to " + linFNm.GetBaseName + "...")
+    
+    av.SetStatus(0)
+    outfile = linFNm.AsString
+    status = TransLines.Call({ntx,outfile,0,1}) 
+    av.SetStatus(100)
+    
+    if (status=0) then
+      linSrc = SrcName.Make(linFNm.AsString)
+      if (linSrc <> nil) then
+        linTab = FTab.Make(SrcName.Make(linFNm.AsString))
+        
+        if (linTab.HasError) then
+          linTab = nil
+          av.PurgeObjects
+        end
+      end
+    end
+    
+    if (linTab = nil) then
+      for each ext in {"shp","dbf","shx"}
+        linFNm.SetExtension(ext)
+        File.Delete(linFNm)
+      end
+      
+      MsgBox.Warning("Could not convert lines, or no lines were present.", "NTXShape Error")
+    end
+  end
+  av.ShowMsg("")
+  av.ClearStatus
+end
+
+
+if (keepGoing) then
+
+  plyFNm = FileName.Merge(outDir, outBase + "b.shp")
+  plyFNm = FileDialog.Put(plyFNm,"*.shp","Build Polygon Shapefile As...")
+  if (plyFNm <> nil) then
+    av.ShowMsg("Converting polygons to " + plyFNm.GetBaseName + "...")
+    
+    av.SetStatus(0)
+    outfile = plyFNm.AsString
+    status = TransPolys.Call({ntx, outfile,0,1}) 
+    av.SetStatus(100)
+    
+    if (status=0) then
+      plySrc = SrcName.Make(plyFNm.AsString)
+      if (plySrc <> nil) then
+        plyTab = FTab.Make(SrcName.Make(plyFNm.AsString))
+        
+        if (plyTab.HasError) then
+          plyTab = nil
+          av.PurgeObjects
+        end
+      end
+    end
+    
+    if (plyTab = nil) then
+      for each ext in {"shp","dbf","shx"}
+        plyFNm.SetExtension(ext)
+        File.Delete(plyFNm)
+      end
+      
+      MsgBox.Warning("Could not build polygons, or no polygons were present.", "NTXShape Error")
+    end
+  end
+  av.ShowMsg("")
+  av.ClearStatus
+end
+
+
+return {pntTab,linTab,plyTab}

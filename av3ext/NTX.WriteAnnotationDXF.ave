@@ -1,0 +1,299 @@
+' * The contents of this file are subject to the Mozilla Public License 
+' * Version 1.1 (the "License"); you may not use this file except in 
+' * compliance with the License. You may obtain a copy of the License at
+' * http://www.mozilla.org/MPL/
+' * 
+' * Software distributed under the License is distributed on an "AS IS" 
+' * basis, WITHOUT WARRANTY OF ANY KIND, either express or implied. See 
+' * the License for the specific language governing rights and limitations 
+' * under the License.
+' * 
+' * The Original Code is NTXShape - NTX to Shapefile Converter.
+' * 
+' * The Initial Developer of the Original Code is ESRI Canada Limited.
+' * Portions created by ESRI Canada are Copyright (C) 1997-2003 
+' * ESRI Canada Limited.  All Rights Reserved.
+' * 
+' * Contributor(s):
+' *  Bruce Dodson <bdodson@esricanada.com>
+
+
+
+
+' NTX.WriteAnnotationDXF
+' Author: Bruce Dodson - ESRI Canada Limited
+
+' The parts written in French come from a theme-to-DXF converter 
+' by someone at ESRI France and included in ArcScripts.  Mainly,
+' we borrowed their code to write the header for the DXF.
+
+' This script can be attached to a button or menu item.  You
+' could use NTX.AnnotateUpdate as the update script for it. 
+' If the CAD Reader is loaded, the script will offer to load the
+' annotation as a theme.  (To disable this behavior, look near 
+' the bottom of the script.)
+
+
+vw = av.GetActiveDoc
+
+radsPerDegree = Number.GetPi/180
+
+
+
+' Initialisation
+lenomdumodule = "Save Annotation"
+Script.The.SetNumberFormat("d.dddddddd")
+constantepointmetre = 0.000352
+lavue = av.GetActiveDoc
+lechelle = lavue.ReturnScale
+ficdef = FileName.Make("$HOME").MakeTmp("anno","dxf")
+ficdxf = FileDialog.Put(ficdef,"*.dxf",lenomdumodule)
+if (ficdxf = NIL) then
+  return nil
+else
+  lefichier = LineFile.Make(ficdxf, #FILE_PERM_WRITE)
+end
+
+' SINCE we won't be processing all selected features
+' in all active themes, this rectangle may be bigger
+' than it should be.  Conversely, since the names 
+' could extend outside the bounding box of the
+' points, the bounding box could end up slightly
+' smaller than the bounds of the annotation features.
+' in the result.
+
+' Determination de l'etendue
+r = Rect.MakeEmpty
+for each t in lavue.GetActiveThemes
+  if (t.Is(FTheme)) then
+    if (t.GetFtab.GetSelection.Count > 0) then
+      r = r.UnionWith(t.GetSelectedExtent)
+    else
+      r = r.UnionWith(t.ReturnExtent)
+    end
+  end
+end
+
+
+
+' Creation de la section HEADER
+lefichier.WriteElt("  0")
+lefichier.WriteElt("SECTION")
+lefichier.WriteElt("  2")
+lefichier.WriteElt("HEADER")
+lefichier.WriteElt("  9")
+lefichier.WriteElt("$EXTMAX")
+lefichier.WriteElt(" 10")
+lefichier.WriteElt(r.GetRight.asString)
+lefichier.WriteElt(" 20")
+lefichier.WriteElt(r.GetTop.asString)
+lefichier.WriteElt("  9")
+lefichier.WriteElt("$EXTMIN")
+lefichier.WriteElt(" 10")
+lefichier.WriteElt(r.GetLeft.asString)   'fix these later.
+lefichier.WriteElt(" 20")
+lefichier.WriteElt(r.GetBottom.asString)
+lefichier.WriteElt("  9")
+lefichier.WriteElt("$LUPREC")
+lefichier.WriteElt(" 70")
+lefichier.WriteElt(" 14")
+lefichier.WriteElt("  0")
+lefichier.WriteElt("ENDSEC")
+
+' Creation de la section TABLES
+lefichier.WriteElt("  0")
+lefichier.WriteElt("SECTION")
+lefichier.WriteElt("  2")
+lefichier.WriteElt("TABLES")
+lefichier.WriteElt("  0")
+lefichier.WriteElt("TABLE")
+lefichier.WriteElt("  2")
+lefichier.WriteElt("LAYER")
+lefichier.WriteElt(" 70")
+lefichier.WriteElt(" 49")
+lefichier.WriteElt("  0")
+lefichier.WriteElt("LAYER")
+lefichier.WriteElt("  2")
+lefichier.WriteElt("  0")
+lefichier.WriteElt(" 70")
+lefichier.WriteElt("  1")
+lefichier.WriteElt(" 62")
+lefichier.WriteElt("  7")
+lefichier.WriteElt("  6")
+lefichier.WriteElt("CONTINUOUS")
+'for each t in lavue.GetActiveThemes
+  'layercourant = t.GetName.Substitute(" ","_")
+  lefichier.WriteElt("  0")
+  lefichier.WriteElt("LAYER")
+  lefichier.WriteElt("  2")
+  lefichier.WriteElt("NTXANNO")
+  'it would be better if it contained FCODE or USERNUM...
+  lefichier.WriteElt(" 70")
+  lefichier.WriteElt(" 64")
+  lefichier.WriteElt(" 62")
+  lefichier.WriteElt("  7")
+  lefichier.WriteElt("  6")
+  lefichier.WriteElt("CONTINUOUS")
+'end
+lefichier.WriteElt("  0")
+lefichier.WriteElt("ENDTAB")
+lefichier.WriteElt("  0")
+lefichier.WriteElt("ENDSEC")
+
+' Creation de la section BLOCKS
+lefichier.WriteElt("  0")
+lefichier.WriteElt("SECTION")
+lefichier.WriteElt("  2")
+lefichier.WriteElt("BLOCKS")
+lefichier.WriteElt("  0")
+lefichier.WriteElt("ENDSEC")
+
+' Creation de la section ENTITIES
+lefichier.WriteElt("  0")
+lefichier.WriteElt("SECTION")
+lefichier.WriteElt("  2")
+lefichier.WriteElt("ENTITIES")
+
+
+
+dxf = lefichier
+
+featCount = 0
+
+for each t in vw.GetActiveThemes
+  if (t.Is(FTheme).Not) then
+    continue
+  end
+
+  ft = t.GetFTab
+  xfld = ft.FindField("DispX")
+  yfld = ft.FindField("DispY")
+  angleFld = ft.FindField("Angle")
+  sizeFld = ft.FindField("Size")
+  textFld = ft.FindField("Keyword")
+  if ((xfld<>nil) and (yfld<>nil) and (angleFld<>nil) and (sizeFld<>nil) and (textFld<>nil)) then
+    av.ShowMsg("Exporting annotation from " + t.GetName + "...")
+
+    'it's probably an NTX point shapefile, or close enough that the
+  	 'user wants us to treat it like one...
+	 
+    dtypeFld = ft.FindField("Datatype")
+    fcodeFld = nil 'ft.FindField("FCode")
+    if (fcodeFld=nil) then
+      fcode = "NTXANNO"
+    end
+    
+    elevFld = ft.FindField("Elevation")
+    if (elevFld = nil) then
+      elev = "0.0"
+    end
+    
+    grSet = t.GetGraphics
+
+    recs = ft.GetSelection
+    if (recs.Count=0) then
+      recs = ft.GetDefBitmap
+    end
+    
+    
+    
+    for each recno in recs
+      'Skip the non-type-7 (non-annotation) features
+      if (dtypeFld<>nil and (ft.ReturnValueNumber(dtypeFld,recno) <> 7)) then
+        continue
+      end
+      
+      if (fcodeFld <> nil) then
+        fcode = ft.ReturnValueString(fcodeFld,recno) 
+        if (fcode.IsNull) then
+          fcode = "NTXANNO"
+        end
+      end
+      
+      if (elevFld <> nil) then
+        elev = ft.ReturnValueString(elevFld,recno)
+      end
+
+      str = ft.ReturnValueString(textFld,recno)
+      
+      if (str="") then
+        continue
+      end
+    
+    
+      x = ft.ReturnValueNumber(xfld,recno)
+      y = ft.ReturnValueNumber(yfld,recno)
+      ang = ft.ReturnValueString(angleFld,recno)
+      siz = ft.ReturnValueNumber(sizeFld,recno)
+      
+      rads = (ang.AsNumber + 90) * radsPerDegree
+      xshift = siz / 1.14 * rads.Cos
+      yshift = siz / 1.14 * rads.Sin
+      
+      x = x - xshift
+      y = y - yshift
+
+ 
+      entity = {
+        "  0",
+        "TEXT",
+        "  8",
+        fcode,
+        " 10",
+        x.AsString,
+        " 20",
+        y.AsString,
+        " 30",
+        elev,
+        " 40",
+        siz.AsString,
+        " 50",
+        ang,
+        "  1",
+        str
+      }
+      
+      dxf.Write(entity,entity.Count)
+      featCount = featCount + 1
+      
+    end      
+  end
+end
+
+
+finish = {
+  "  0",
+  "ENDSEC",
+  "  0",
+  "EOF"
+}
+
+
+dxf.Write(finish,finish.Count)
+dxf.Close
+
+av.ShowMsg("")
+
+featCount.SetFormat("d")
+
+
+if (Extension.Find("CAD Reader") <> nil) then
+  dxfSrcName = SrcName.Make(ficdxf.GetFullName ++ "annotation")
+  
+  if (dxfSrcName <> nil) then
+    if (MsgBox.YesNo(featCount.AsString++"name features written.  Load DXF Annotation Theme into the View?","Load Annotation?",true)) then
+      vw.AddTheme(Theme.Make(dxfSrcName))
+    end
+  else
+    MsgBox.Warning("CAD Reader seems to be loaded, but I can't read the DXF.","NTXShape")
+  end
+else
+  MsgBox.Info(featCount.AsString ++ "name features written to " + ficdxf.AsString,"NTXShape")
+end
+
+
+' Retour
+return NIL
+
+
+

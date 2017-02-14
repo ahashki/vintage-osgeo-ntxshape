@@ -1,0 +1,74 @@
+/**
+ * The contents of this file are subject to the Mozilla Public License 
+ * Version 1.1 (the "License"); you may not use this file except in 
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/MPL/
+ *
+ * Software distributed under the License is distributed on an "AS IS" 
+ * basis, WITHOUT WARRANTY OF ANY KIND, either express or implied. See 
+ * the License for the specific language governing rights and limitations 
+ * under the License.
+ *
+ * The Original Code is NTXShape - NTX to Shapefile Converter.
+ *
+ * The Initial Developer of the Original Code is ESRI Canada Limited.
+ * Portions created by ESRI Canada are Copyright (C) 1997-2003 
+ * ESRI Canada Limited.  All Rights Reserved.
+ *
+ * Contributor(s):
+ *  Bruce Dodson <bdodson@esricanada.com>
+**/
+
+
+#include "resource.h"
+
+#include <windows.h>
+#include <winver.h>
+
+1 VERSIONINFO
+  FILEVERSION	NTX_VERSION_QUAD
+  PRODUCTVERSION	NTX_VERSION_QUAD
+  FILEFLAGSMASK	VS_FFI_FILEFLAGSMASK
+  FILEFLAGS	0
+  FILEOS	VOS_NT_WINDOWS32
+  FILETYPE	VFT_DLL
+  FILESUBTYPE	0	// not used
+   BEGIN
+       BLOCK "StringFileInfo"
+       BEGIN
+           BLOCK "040904E4"
+           BEGIN
+               VALUE	"ProductName",       "NTXShape Converter\0"
+               VALUE	"InternalName",		"NTXShape Converter\0"
+               VALUE	"ProductVersion",    NTX_VERSION "\0"
+
+               VALUE	"CompanyName",       "ESRI Canada Limited\0"
+               VALUE	"LegalCopyright",	   "Copyright © " NTX_COPYRIGHT_DATE " ESRI Canada Limited\0"
+
+               VALUE	"FileDescription",   "NTX Conversion Library\0"
+               VALUE	"FileVersion",       NTX_VERSION "\0"
+               VALUE	"OriginalFilename",  NTX_DLL_NAME "\0"
+           END
+       END
+       BLOCK "VarFileInfo"
+       BEGIN
+           VALUE	"Translation", 0x0409, 1252
+       END
+   END
+
+2 TYPELIB MOVEABLE PURE "ntxapi.tlb"
+
+IDD_ProgressDialog DIALOG MOVEABLE IMPURE LOADONCALL DISCARDABLE	24, 24, 221, 42
+STYLE DS_MODALFRAME | DS_3DLOOK | WS_CAPTION | WS_VISIBLE | WS_POPUP
+CAPTION "NTXShape Converter"
+FONT 8, "MS Sans Serif"
+BEGIN
+    CONTROL         "Progress Gauge", IDC_ProgressBar, "msctls_progress32", 0, 	4,24,212,12
+    LTEXT           "", IDC_StaticTaskName, 	4,8,212,12, SS_LEFT
+END
+
+// If I edit this with Resource Studio, it loses the DS_3DLOOK STYLE attribute.
+// Need to add it back by hand.
+
+
+// STYLE WS_SYSMENU |

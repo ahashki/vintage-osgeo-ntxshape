@@ -1,0 +1,153 @@
+' * The contents of this file are subject to the Mozilla Public License 
+' * Version 1.1 (the "License"); you may not use this file except in 
+' * compliance with the License. You may obtain a copy of the License at
+' * http://www.mozilla.org/MPL/
+' * 
+' * Software distributed under the License is distributed on an "AS IS" 
+' * basis, WITHOUT WARRANTY OF ANY KIND, either express or implied. See 
+' * the License for the specific language governing rights and limitations 
+' * under the License.
+' * 
+' * The Original Code is NTXShape - NTX to Shapefile Converter.
+' * 
+' * The Initial Developer of the Original Code is ESRI Canada Limited.
+' * Portions created by ESRI Canada are Copyright (C) 1997-2003 
+' * ESRI Canada Limited.  All Rights Reserved.
+' * 
+' * Contributor(s):
+' *  Bruce Dodson <bdodson@esricanada.com>
+
+
+' NTX.Annotate
+
+vw = av.GetActiveDoc
+grList = vw.GetGraphics
+
+
+' I will first add text to a work graphic list.
+' This gives it a context in which I can size,
+' position and rotate the graphics.
+' (This is necessary because the text is resized
+' by manipulating the bounding box in map units,
+' and GT doesn't have a valid b.b. until it's
+' on a GL with a display.)
+
+' Then I add them to the view's graphic list
+' in batch.  (If I add them to the main gl
+' before resize, they don't invalidate properly.
+' Only the original area invalidates.)
+
+
+workGrList = GraphicList.Make
+workGrList.SetDisplay(grList.GetDisplay)
+
+
+
+radsPerDegree = Number.GetPi/180
+
+'sizeFct = 2834 / vw.ReturnScale  'points per meter scaled by a fudge factor
+
+'sizeFct = 
+
+
+for each t in vw.GetActiveThemes
+  if (t.Is(FTheme).Not) then
+    continue
+  end
+
+  ft = t.GetFTab
+  xf = ft.FindField("DispX")
+  yf = ft.FindField("DispY")
+  af = ft.FindField("Angle")
+  sf = ft.FindField("Size")
+  kf = ft.FindField("Keyword")
+  if ((xf<>nil) and (yf<>nil) and (af<>nil) and (sf<>nil) and (kf<>nil)) then
+
+    'it's probably an NTX point shapefile
+    
+    grSet = t.GetGraphics
+
+    recs = ft.GetSelection
+    if (recs.Count=0) then
+      recs = ft.GetDefBitmap
+    end
+    
+    recs = recs.Clone
+    
+    'Remove the non type-7 (annotation)
+    'This will fail if the desc table isn't joined on.  
+    'But then the selection stays the same so that's OK
+    ft.Query("[DataType] = 7",recs,#VTAB_SELTYPE_AND)
+    
+    for each recno in recs
+      x = ft.ReturnValueNumber(xf,recno)
+      y = ft.ReturnValueNumber(yf,recno)
+      ang = ft.ReturnValueNumber(af,recno)
+      siz = ft.ReturnValueNumber(sf,recno) * 1.7 'fudge factor; different ideas of font height.
+      str = ft.ReturnValueString(kf,recno)
+      
+      if (str="") then
+        continue
+      end
+            
+      gt = GraphicText.Make(str,x@y)
+      workGrList.Add(gt)
+      grSet.Add(gt)
+      
+      if (siz>0) then
+        ext = gt.GetExtent
+        newsize = siz / ext.GetY
+        gt.SetExtent(newSize@newSize * ext)
+      end
+      
+      vw.GetDisplay.HookUpSymbol(gt.GetSymbol)
+      
+
+      curSz = gt.GetExtent ' the text doesn't fill its bounding box in the Y direction.
+                           ' Only 2/3 of it but I'll worry about that later.
+      
+      
+      ' We need an offset to center the text on the point.
+      ' This gives us an easier starting condition.
+      
+      center = curSz / (2 @ 2)
+      
+      ' Now we need another offset to justify the centered
+      ' text as in CARIS.  This is the vector to be rotated.
+      
+      
+      justify = curSz / (2 @ -6)
+ 
+      ' (The total offset will be justify - center.  Notice
+      ' that, for angle = 0, this moves the text down by 
+      ' -1/6 - 1/2, or 2/3  of its bounding box's height.
+      ' And to center it would be 2@6, to move it down by
+      ' 1/3 of its bounding box's height.)
+      
+      
+      if (ang<>0) then
+        gt.SetAngle( ang )
+
+        ' a little magic formula to rotate a vector...
+
+        rads = ang * radsPerDegree
+        
+        a = justify.GetX        c = rads.Cos
+        b = justify.GetY        d = rads.Sin
+        
+        justify = ( ((a*c)-(b*d)) @ ((a*d)+(b*c)) )
+
+      end
+        
+      offset = justify - center
+      
+      gt.GetBounds.Move( offset.GetX, offset.GetY )
+      
+      workGrList.RemoveGraphic(gt)
+      grList.AddBatch(gt)
+
+    end
+    grList.EndBatch    
+  end
+end
+

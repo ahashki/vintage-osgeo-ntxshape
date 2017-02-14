@@ -1,0 +1,77 @@
+# * The contents of this file are subject to the Mozilla Public License 
+# * Version 1.1 (the "License"); you may not use this file except in 
+# * compliance with the License. You may obtain a copy of the License at
+# * http://www.mozilla.org/MPL/
+# * 
+# * Software distributed under the License is distributed on an "AS IS" 
+# * basis, WITHOUT WARRANTY OF ANY KIND, either express or implied. See 
+# * the License for the specific language governing rights and limitations 
+# * under the License.
+# * 
+# * The Original Code is NTXShape - NTX to Shapefile Converter.
+# * 
+# * The Initial Developer of the Original Code is ESRI Canada Limited.
+# * Portions created by ESRI Canada are Copyright (C) 1997-2003 
+# * ESRI Canada Limited.  All Rights Reserved.
+# * 
+# * Contributor(s):
+# *  Bruce Dodson <bdodson@esricanada.com>
+
+
+CC = gcc
+
+LIB_OBJS = intxfile.o ntx.o ntxrecs.o ntxshape.o ntxdesc.o ntxline.o \
+   descattr.o dbfout.o dbfopen.o shpopen.o shpout.o \
+   lineout.o pntout.o nameout.o patmatch.o \
+   ntxbuild.o ntxsearch.o polyout.o
+
+EXE_OBJS = stripext.o convert.o
+
+
+ALL_TARGETS = libntxshape.a ntxshape
+
+
+.PHONY: all clean clean_objects clean_targets
+.IGNORE: clean_objects clean_targets
+.SILENT: clean_objects clean_targets
+
+CFLAGS += -mcpu=pentiumpro -malign-double -Wall
+
+ifdef DEBUG
+CPPFLAGS += -DDEBUG
+CFLAGS += -g
+else
+CFLAGS += -O3 -funroll-loops -ffast-math
+LDFLAGS += -Wl,--strip-all
+endif
+
+
+ifdef PROFILE
+CFLAGS += -pg
+LDFLAGS += -pg
+endif
+
+CXXFLAGS = $(CFLAGS) 
+
+%.o : %.cpp
+	$(CC) -c $(CXXFLAGS) $(CPPFLAGS) $< -o $@
+
+all: $(ALL_TARGETS)
+
+libntxshape.a: $(LIB_OBJS)
+	ar -rs libntxshape.a $^
+
+ntxshape: $(EXE_OBJS) libntxshape.a
+	g++  $(LDFLAGS) -o $@ $^
+
+clean: clean_objects clean_targets
+
+clean_objects: 
+	echo Removing intermediate files
+	rm $(EXE_OBJS) $(LIB_OBJS)
+
+clean_targets:
+	echo Removing target files
+	rm $(ALL_TARGETS)
+
+include dependencies

@@ -1,0 +1,212 @@
+/**
+ * The contents of this file are subject to the Mozilla Public License 
+ * Version 1.1 (the "License"); you may not use this file except in 
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/MPL/
+ *
+ * Software distributed under the License is distributed on an "AS IS" 
+ * basis, WITHOUT WARRANTY OF ANY KIND, either express or implied. See 
+ * the License for the specific language governing rights and limitations 
+ * under the License.
+ *
+ * The Original Code is NTXShape - NTX to Shapefile Converter.
+ *
+ * The Initial Developer of the Original Code is ESRI Canada Limited.
+ * Portions created by ESRI Canada are Copyright (C) 1997-2003 
+ * ESRI Canada Limited.  All Rights Reserved.
+ *
+ * Contributor(s):
+ *  Bruce Dodson <bdodson@esricanada.com>
+**/
+
+
+#include "resource.h"
+
+[ uuid(990A7B19-B9FB-4641-BCF1-B15D4CE016F0),
+  helpstring("NTX Conversion Library"),
+  lcid(0x00000000),
+  version(NTX_VERSION_NUMBER) ]
+library NTX {
+  [v1_enum] typedef enum NTXNoDataValue {
+    ntxNoData = -2147483648L
+  } NTXNoDataValue;
+
+  [v1_enum] typedef enum NTXStandardFilterType {
+    [ helpstring("NTX Standard Filter: Normal (clear previous standard filter)") ]
+    ntxFilterNormal = 0,
+
+    [ helpstring("NTX Standard Filter: Polygon labels and boundaries") ]
+    ntxFilterPolygon = 1,
+  } NTXStandardFilterType;
+
+  [v1_enum] typedef enum NTXReadPositionType {
+    ntxReadFirst = 0,
+    ntxReadNext = 1,
+  } NTXReadPositionType;
+
+  [v1_enum] typedef enum NTXDataType {
+    ntxDataTypeCompactedLine =  1,
+    ntxDataTypeRaster =         2,
+    ntxDataTypeSolidLine =      3,
+    ntxDataTypeDashedLine =     4,
+    ntxDataTypeAsciiText =      5,
+    ntxDataTypePositionedText = 6,
+    ntxDataTypeName =           7,
+    ntxDataTypeSymbol =         8,
+    ntxDataTypeBlockText =      9,
+    ntxDataTypeSounding =       10,
+    ntxDataTypeSpotHeight =     11
+  } NTXDataType;
+
+  [v1_enum] typedef enum NTXSuperType {
+    ntxSuperTypeCompactedLine =  1001,
+    ntxSuperTypeRaster =         1002,
+    ntxSuperTypeSolidLine =      1003,
+    ntxSuperTypeDashedLine =     1004,
+    ntxSuperTypeAsciiText =      1005,
+    ntxSuperTypePositionedText = 1006,
+    ntxSuperTypeName =           1007,
+    ntxSuperTypeSymbol =         1008,
+    ntxSuperTypeBlockText =      1009,
+    ntxSuperTypeSounding =       1010,
+    ntxSuperTypeSpotHeight =     1011
+  } NTXSuperTypeConstants;
+
+  [v1_enum] typedef enum NTXBoolean {
+    ntxTrue = 1,
+    ntxFalse = 0,
+  } NTXBoolean;
+
+  [v1_enum] typedef enum NTXDescFlags {
+     ntxDescGraphicalLink = 1,
+     ntxDescLogicalLink = 1L<<1,
+     ntxDescSelected = 1L<<2,
+     ntxDescSuppressed = 1L<<3,
+     ntxDescMasked = 1L<<4,
+     ntxDescMarkedForDeletion = 1L<<5,
+     ntxDescFClosed = 1L<<6,
+     ntxDescRepositioned = 1L<<7,
+     ntxDescDominating = 1L<<8,
+     ntxDescTopologicalNode = 1L<<9,
+     ntxDescTopologicalLine = 1L<<10,
+     ntxDescPolygonLabel = 1L<<11,
+     ntxDescZCoordinates = 1L<<13,
+     ntxDescSymbolized = 1L<<15,
+     ntxDescHasIndexKey = 1L<<16,
+     ntxDescCubelReferences = 1L<<17,
+     ntxDescLineCombined = 1L<<19,
+     ntxDescPutPerformed = 1L<<21,
+     ntxDescLineDisplaced = 1L<<22,
+     ntxDescContiguousRaster = 1L<<22,
+     ntxDescLineExaggerated = 1L<<23
+   } NTXDescFlags;
+
+   [v1_enum] typedef enum NTXSuperFlags {
+     ntxSuperLinkedToNext = 1,
+     ntxSuperGroupMarkedForDeletion = 1L<<5,
+     ntxSuperTopologicalNode = 1L<<9,
+     ntxSuperTopologicalLine = 1L<<10,
+     ntxSuperHasIndexKey = 1L<<16,
+  } NTXSuperFlags;
+
+
+  [ uuid(E2A9E66D-685D-4786-8C29-050C836D43CE),
+    helpstring("NTX Descriptor structure") ]
+  typedef struct NTXDescriptor {
+    [helpstring("If has_desc is 1, a descriptor has been loaded, so usernum, fcode, sourceid, datatype, and descflags are valid.")]
+    NTXBoolean has_desc;
+
+    [helpstring("If has_super is 1, a super-descriptor has been loaded, so themenum, indexkey, and superflags are valid.")]
+    NTXBoolean has_super;
+
+    [helpstring("The user number.  In the absence of a super-descriptor, this may be treated as equivalent to a theme number.")]
+    long usernum;
+
+    [helpstring("The feature code.  In VB, use StrConv(fcode, vbUnicode) to unpack")]
+    BYTE fcode[16];
+
+    [helpstring("The source identifier.  In VB, use StrConv(sourceid, vbUnicode) to unpack")]
+    BYTE sourceid[16];
+
+    [helpstring("The datatype.")]
+    NTXDataType datatype;
+
+    [helpstring("The descriptor flags.  Use with the NTXDescFlags enumerated type.")]
+    long descflags;
+
+    [helpstring("The theme number from the super-descriptor.")]
+    long themenum;
+
+    [helpstring("The index key from the super-descriptor.  In VB, use StrConv(sourceid, vbUnicode) to unpack")]
+    BYTE indexkey[16];
+
+    [helpstring("The flags from the super-descriptor.  Use with the NTXSuperFlags enumerated type.")]
+    long superflags;
+  } NTXDescriptor;
+
+  //[callback] void __stdcall NTXStatusProc(float progress);
+  //[callback] void __stdcall NTXScanDescProc([in] long recno, [in] NTXDescriptor * pDesc, long cbData);
+  //[callback] long __stdcall NTXCustomFilter([in] long recno, [in] NTXDescriptor * pDesc);
+
+  [ uuid(B1122E17-0B0E-47d7-8DE0-610C4B83743D),
+    helpstring("NTX Handle") ]
+  typedef struct NTXHandle {
+    [hidden] long hntx;
+  } NTXHandle;
+
+
+
+  [
+  uuid(61DF1B36-6C4D-43e3-B78E-DB5FC1584E95),
+  helpstring("NTXShape Module"),
+  dllname(NTX_DLL_NAME) ]
+  
+  module NTXShape {
+
+    [entry("NTXOpen"), helpstring("Opens an NTX file, returning an NTX handle used in further operations.")]
+    NTXHandle __stdcall NTXOpen([in] LPCSTR filename);
+  
+    [entry("NTXClose"), helpstring("Closes an NTX file.")]
+    void __stdcall NTXClose([in,ref]NTXHandle *hntx);
+  
+    [entry("NTXIsValid"), helpstring("Checks whether the NTX handle is useable.")]
+    NTXBoolean __stdcall NTXIsValid([in,ref]NTXHandle const *hntx);
+  
+    [entry("NTXSetThemeFilter"), helpstring("Limits the converter to those records within a single theme (if a positive number is used), or to all themes except one (if a negative number is used).  Supply zero to reset the theme filter.")]
+    void __stdcall NTXSetThemeFilter([in,ref]NTXHandle const *hntx, long theme);
+  
+    [entry("NTXSetFCodeFilter"), helpstring("Limits the converter to those records matching the FCode pattern.  Patterns may use * and ? as wildcards, [a-z] to specify a range of characters and | to separate multiple patterns.  \\ may be used to escape special characters.")]
+    void __stdcall NTXSetFCodeFilter([in,ref]NTXHandle const *hntx, [in] LPCSTR fcode);
+  
+    [entry("NTXSetStandardFilter"), helpstring("Limits the converter using a standard filter.  *You do not need to specify ntxFilterPolygon before converting polygons.")]
+    void __stdcall NTXSetStandardFilter([in,ref]NTXHandle const *hntx, [defaultvalue(ntxFilterNormal)] NTXStandardFilterType standardFilter);
+  
+    [hidden, entry("NTXSetCustomFilter"), helpstring("Limits the converter using a custom filter callback.\nSub NTXCustomFilterProc(ByVal recno As Long, pDesc As NTXDescriptor)")]
+    void __stdcall NTXSetCustomFilter([in,ref] NTXHandle const *hntx, long NTXCustomFilterProc);
+  
+    [entry("NTXConvertPoints"), helpstring("Generates a point shapefile containing NTX names, symbols, spot heights, and/or soundings.")]
+    long __stdcall NTXConvertPoints([in,ref] NTXHandle const *hntx, [in] LPCSTR shpOut, [defaultvalue(ntxFalse)] NTXBoolean append, [defaultvalue(ntxTrue)] NTXBoolean showProgress);
+  
+    [entry("NTXConvertLines"), helpstring("Generates a line shapefile containing the NTX compressed, solid, and/or dashed lines.")]
+    long __stdcall NTXConvertLines([in,ref]NTXHandle const *hntx, [in]LPCSTR shpOut, [defaultvalue(ntxFalse)] NTXBoolean append, [defaultvalue(ntxTrue)] NTXBoolean showProgress);
+
+    [entry("NTXConvertLinesZ"), helpstring("Generates a 3D line shapefile containing the NTX compressed, solid, and/or dashed lines.  *NTX lines which do not have Z values are written with z=0 for all vertices.")]
+    long __stdcall NTXConvertLinesZ([in,ref]NTXHandle const *hntx, [in]LPCSTR shpOut, [defaultvalue(ntxFalse)] NTXBoolean append, [defaultvalue(ntxTrue)] NTXBoolean showProgress);
+
+    [entry("NTXConvertNames"), helpstring("Generates a line shapefile containing the NTX names in long format.")]
+    long __stdcall NTXConvertNames([in,ref]NTXHandle const *hntx, [in] LPCSTR shpOut, [defaultvalue(ntxFalse)] NTXBoolean append, [defaultvalue(ntxTrue)] NTXBoolean showProgress);
+  
+    [entry("NTXConvertPolygons"), helpstring("Generates a polygon shapefile based on the topological lines and polygon label points from the NTX file.")]
+    long __stdcall NTXConvertPolygons([in,ref]NTXHandle const *hntx, [in]LPCSTR shpOut, [defaultvalue(ntxFalse)] NTXBoolean append, [defaultvalue(ntxTrue)] NTXBoolean showProgress);
+  
+    [entry("NTXConvertDescriptors"), helpstring("Generates a DBF file containing the NTX descriptors.")]
+    long __stdcall NTXConvertDescriptors([in,ref]NTXHandle const *hntx, [in]LPCSTR dbfOut, [defaultvalue(ntxFalse)] NTXBoolean append, [defaultvalue(ntxTrue)] NTXBoolean showProgress);
+  
+    [entry("NTXReadDescriptor"), helpstring("Reads a descriptor from the NTX file.  Returns the record number on success, or NTX_NODATA if there are no more records.")]
+    long __stdcall NTXReadDescriptor([in,ref]NTXHandle const *hntx, [in]NTXDescriptor *descPointer, [defaultvalue(ntxReadNext)] NTXReadPositionType readPosition);
+  
+    [hidden, entry("NTXScanDescriptors"), helpstring("Scans the NTX descriptors, executing a callback function for each one.\nSub NTXScanDescProc(ByVal recno As Long, pDesc As NTXDescriptor, ByVal cbData As Long)")]
+    long __stdcall NTXScanDescriptors([in,ref]NTXHandle const *hntx, long NTXScanDescProc, [defaultvalue(0)] long callbackData, [defaultvalue(ntxFalse)] NTXBoolean showProgress);
+  }
+
+}

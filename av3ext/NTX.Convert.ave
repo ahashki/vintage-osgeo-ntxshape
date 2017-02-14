@@ -1,0 +1,122 @@
+' * The contents of this file are subject to the Mozilla Public License 
+' * Version 1.1 (the "License"); you may not use this file except in 
+' * compliance with the License. You may obtain a copy of the License at
+' * http://www.mozilla.org/MPL/
+' * 
+' * Software distributed under the License is distributed on an "AS IS" 
+' * basis, WITHOUT WARRANTY OF ANY KIND, either express or implied. See 
+' * the License for the specific language governing rights and limitations 
+' * under the License.
+' * 
+' * The Original Code is NTXShape - NTX to Shapefile Converter.
+' * 
+' * The Initial Developer of the Original Code is ESRI Canada Limited.
+' * Portions created by ESRI Canada are Copyright (C) 1997-2003 
+' * ESRI Canada Limited.  All Rights Reserved.
+' * 
+' * Contributor(s):
+' *  Bruce Dodson <bdodson@esricanada.com>
+
+' NTX.Convert
+
+
+theView = av.GetActiveDoc
+
+ntxDllName = "NTXAPI14.DLL"
+
+theFname = ("$AVBIN/"+ntxDllName).AsFilename
+if (File.Exists(theFname).Not) then
+  theFname = FileName.FindInSystemSearchPath(ntxDllName)
+  if (theFname.Is(FileName).Not) then
+    MsgBox.Error("Cannot find a required file: " + ntxDllName,"")
+    exit
+  end
+end
+
+ntxDLL = DLL.Make(theFName)
+
+'Doesn't work!
+'SetMainWindow = DLLProc.Make(ntxDLL,"NTXSetMainWindow", #DLLPROC_TYPE_VOID,{#DLLPROC_TYPE_INT32})
+'mainWindow = DLL.GetAVWindowHandle
+'SetMainWindow.Call({mainWindow})
+
+Open = DLLProc.Make(ntxDLL,"NTXOpen",#DLLPROC_TYPE_INT32,{#DLLPROC_TYPE_STR})
+Close = DLLProc.Make(ntxDLL,"NTXClose",#DLLPROC_TYPE_VOID,{#DLLPROC_TYPE_PINT32})
+IsValid = DLLProc.Make(ntxDLL,"NTXIsValid",#DLLPROC_TYPE_INT32,{#DLLPROC_TYPE_PINT32})
+
+if ((Open=Nil) or (Close=Nil) or (IsValid=Nil)) then
+  MsgBox.Error("Incorrect version of " + ntxDllName,"")
+  exit
+end
+
+
+
+fnm = Self
+if (fnm.Is(FileName).Not) then
+  fnm = FileDialog.Show("*.ntx","NTX Files","Convert NTX File...")
+  if (fnm=nil) then
+    return nil
+  end
+end
+
+
+if (File.Exists(fnm).Not) then
+  return nil
+end
+
+
+
+results = nil
+
+ntx = Open.Call({fnm.AsString})
+
+if (IsValid.Call({ntx}) <> 0) then
+  'The actual conversion is in a separate script so that, 
+  'if it bombs, the file still closes correctly.
+  results = av.Run("NTX.ConvertImp",{ntx,fnm,ntxDLL})
+else
+  MsgBox.Error("NTX file is unreadable.","")
+end
+
+Close.Call({ntx})
+
+Open=Nil
+Close=Nil
+IsValid=Nil
+ntxDLL = nil
+av.PurgeObjects  'help it to unload quickly
+
+if (results.Is(List)) then
+
+  if (theView.Is(View)) then
+    zoomFull = ( theView.GetThemes.Count = 0 )
+    r = Rect.MakeEmpty
+    
+    addThemes = Stack.Make
+    
+    for each ntxTab in results
+      if (ntxTab.Is(FTab)) then
+        ntxTab.CreateIndex(ntxTab.FindField("Shape"))
+        
+        t = FTheme.Make(ntxTab)
+        r = r.UnionWith(t.ReturnExtent)
+        
+        addThemes.Push(t)
+      end
+    end
+    
+    if (addThemes.IsEmpty.Not) then
+      while (addThemes.IsEmpty.Not)
+        theView.AddTheme(addThemes.Pop)
+      end
+      if (zoomFull) then
+        theView.GetDisplay.SetExtent(r.Scale(1.1))
+      end
+      
+      theView.InvalidateTOC(nil)
+    end
+  end      
+end      
+
+
+return nil

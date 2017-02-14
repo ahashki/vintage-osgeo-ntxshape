@@ -1,0 +1,51 @@
+' * The contents of this file are subject to the Mozilla Public License 
+' * Version 1.1 (the "License"); you may not use this file except in 
+' * compliance with the License. You may obtain a copy of the License at
+' * http://www.mozilla.org/MPL/
+' * 
+' * Software distributed under the License is distributed on an "AS IS" 
+' * basis, WITHOUT WARRANTY OF ANY KIND, either express or implied. See 
+' * the License for the specific language governing rights and limitations 
+' * under the License.
+' * 
+' * The Original Code is NTXShape - NTX to Shapefile Converter.
+' * 
+' * The Initial Developer of the Original Code is ESRI Canada Limited.
+' * Portions created by ESRI Canada are Copyright (C) 1997-2003 
+' * ESRI Canada Limited.  All Rights Reserved.
+' * 
+' * Contributor(s):
+' *  Bruce Dodson <bdodson@esricanada.com>
+
+' NTX.Uninstall
+
+if (av.GetProject=nil) then
+  return nil
+end
+
+
+
+menuChoices = Self.Get(0)
+
+for each guiDesc in menuChoices
+  theGUI = av.GetProject.FindGUI(guiDesc.Get(0))
+  if (theGUI=nil) then
+    continue
+  end
+  
+  for each menuDesc in guiDesc.Get(1)
+    theMenu = theGUI.GetMenuBar.FindByLabel(menuDesc.Get(0))
+    if (theMenu=nil) then
+      continue
+    end
+    
+    for each chcDesc in menuDesc.Get(1)
+      theChc = chcDesc.Get(0)
+      
+      chcIdx = theMenu.GetControls.Find(theChc)
+      if (chcIdx>=0) then
+        theMenu.Remove(theChc)
+      end
+    end
+  end
+end

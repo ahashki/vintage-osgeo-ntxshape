@@ -1,0 +1,60 @@
+/**
+ * The contents of this file are subject to the Mozilla Public License 
+ * Version 1.1 (the "License"); you may not use this file except in 
+ * compliance with the License. You may obtain a copy of the License at
+ * http://www.mozilla.org/MPL/
+ *
+ * Software distributed under the License is distributed on an "AS IS" 
+ * basis, WITHOUT WARRANTY OF ANY KIND, either express or implied. See 
+ * the License for the specific language governing rights and limitations 
+ * under the License.
+ *
+ * The Original Code is NTXShape - NTX to Shapefile Converter.
+ *
+ * The Initial Developer of the Original Code is ESRI Canada Limited.
+ * Portions created by ESRI Canada are Copyright (C) 1997-2003 
+ * ESRI Canada Limited.  All Rights Reserved.
+ *
+ * Contributor(s):
+ *  Bruce Dodson <bdodson@esricanada.com>
+**/
+
+
+#include <windows.h>
+#include <winver.h>
+
+#include "resource.h"
+
+1	VERSIONINFO
+  FILEVERSION	NTX_VERSION_QUAD
+  PRODUCTVERSION	NTX_VERSION_QUAD
+  FILEFLAGSMASK	VS_FFI_FILEFLAGSMASK
+  FILEFLAGS	0
+  FILEOS	VOS_NT_WINDOWS32
+  FILETYPE	VFT_APP
+  FILESUBTYPE	0	// not used
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904E4"
+        BEGIN
+            VALUE	"ProductName",       "NTXShape Converter\0"
+            VALUE	"InternalName",		"NTXShape Converter\0"
+            VALUE	"ProductVersion",    NTX_VERSION "\0"
+
+            VALUE	"CompanyName",       "ESRI Canada Limited\0"
+            VALUE	"LegalCopyright",	   "Copyright © " NTX_COPYRIGHT_DATE " ESRI Canada Limited\0"
+
+            VALUE	"FileDescription",   "NTXShape command line utility\0"
+            VALUE	"FileVersion",       NTX_VERSION "\0"
+            VALUE	"OriginalFilename",  "NTXSHAPE.EXE\0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE	"Translation", 0x0409, 1252
+    END
+END
+
+
+

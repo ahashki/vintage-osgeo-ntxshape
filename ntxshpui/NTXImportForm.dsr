@@ -1,0 +1,539 @@
+VERSION 5.00
+Begin {C62A69F0-16DC-11CE-9E98-00AA00574A4F} NTXImportForm 
+   BorderStyle     =   3  'Fixed Dialog
+   Caption         =   "NTX Import"
+   ClientHeight    =   5790
+   ClientLeft      =   30
+   ClientTop       =   315
+   ClientWidth     =   7230
+   MaxButton       =   0   'False
+   MinButton       =   0   'False
+   OleObjectBlob   =   "NTXImportForm.dsx":0000
+   ShowInTaskbar   =   0   'False
+   StartUpPosition =   1  'CenterOwner
+End
+Attribute VB_Name = "NTXImportForm"
+Attribute VB_GlobalNameSpace = False
+Attribute VB_Creatable = False
+Attribute VB_PredeclaredId = True
+Attribute VB_Exposed = False
+' NTXImportForm.dsr/dsx - User interface, prototyped as an ArcMap VBA
+' UserForm and subsequently ported to VB6.
+' Since the GUI requires ArcMap, I took the simple route to port it,
+' just importing the UserForm as a Designer.
+
+
+'' The contents of this file are subject to the Mozilla Public License
+'' Version 1.1 (the "License"); you may not use this file except in
+'' compliance with the License. You may obtain a copy of the License at
+'' http://www.mozilla.org/MPL/
+''
+'' Software distributed under the License is distributed on an "AS IS"
+'' basis, WITHOUT WARRANTY OF ANY KIND, either express or implied. See
+'' the License for the specific language governing rights and limitations
+'' under the License.
+''
+'' The Original Code is NTXShape - NTX to Shapefile Converter.
+''
+'' The Initial Developer of the Original Code is ESRI Canada Limited.
+'' Portions created by ESRI Canada are Copyright (C) 1997-2003
+'' ESRI Canada Limited.  All Rights Reserved.
+''
+'' Contributor(s):
+''   Bruce Dodson, ESRI Canada <bdodson@esricanada.com>
+
+
+
+Option Explicit
+
+Private m_ntxFileName As String
+Private m_ntxPath As String
+Private m_ntxBase As String
+
+Private m_shpBase As String
+
+Private m_ntxExt As String
+Private m_hntx As NTXHandle
+
+Private Sub CreateSpatialIndex(ByVal pShapeFC As IFeatureClass)
+  ' This is a trivial one-liner in MapObjects or Avenue.
+  
+  Dim pFlds As IFieldsEdit
+  Set pFlds = New esriCore.Fields
+  pFlds.AddField pShapeFC.Fields.Field(pShapeFC.FindField(pShapeFC.ShapeFieldName))
+  
+  Dim pIndex As IIndexEdit
+  Set pIndex = New esriCore.Index
+  Set pIndex.Fields = pFlds
+  pIndex.Name = "Shape"
+  
+  Dim pSchemaLock As ISchemaLock
+  Set pSchemaLock = pShapeFC
+  
+  On Error Resume Next
+  pSchemaLock.ChangeSchemaLock esriExclusiveSchemaLock
+  If Err = 0 Then
+    pShapeFC.AddIndex pIndex
+    If Err <> 0 Then MsgBox "Error, could not create spatial index."
+    
+    pSchemaLock.ChangeSchemaLock esriSharedSchemaLock
+  End If
+End Sub
+
+
+Private Sub UpdateOKButton()
+    Dim enab As Boolean
+    If NTXIsValid(m_hntx) Then
+        If txtOutputFolder <> "" Then
+            If chkOutputPoints Or chkOutputLines Or chkOutputPolygons Or chkOutputNames Then
+                enab = True
+            End If
+        End If
+    End If
+    
+    btnOK.Enabled = enab
+End Sub
+
+
+Private Sub PopulateThemeNumbers()
+    If cboThemeNumber.ListCount < 2 Then
+        If NTXIsValid(m_hntx) Then
+            NTXSetThemeFilter m_hntx, 0
+            NTXSetFCodeFilter m_hntx, ""
+            
+            Dim ntxDesc As NTXDescriptor
+            Dim pDict As Dictionary
+            Set pDict = New Dictionary
+            
+            If NTXReadDescriptor(m_hntx, ntxDesc, ntxReadFirst) <> ntxNoData Then
+                pDict.Item(ntxDesc.usernum) = True
+                
+                Do While NTXReadDescriptor(m_hntx, ntxDesc, ntxReadNext) <> ntxNoData
+                    If Not pDict.Exists(ntxDesc.usernum) Then
+                        pDict.Item(ntxDesc.usernum) = True
+                    End If
+                Loop
+                
+                
+                If pDict.Count > 0 Then
+                    ' Theme numbers should be sorted, and VBA's combo box
+                    ' doesn't have a property to do that.  Since the list
+                    ' of themes is likely to be small, a simple insertion
+                    ' sort will do the trick.
+                    
+                    Dim i As Long, j As Long
+                    
+                    Dim themeNums() As Long
+                    Dim themeCount As Long
+                    
+                    ReDim themeNums(0 To pDict.Count - 1)
+                    
+                    Dim vThemeNum
+                    For Each vThemeNum In pDict.Keys
+                    
+                        Dim themeNum As Long
+                        themeNum = vThemeNum
+                        
+                        For i = 0 To themeCount - 1
+                            If themeNum < themeNums(i) Then
+                                For j = themeCount - 1 To i Step -1
+                                    themeNums(j + 1) = themeNums(j)
+                                Next
+                                themeNums(i) = themeNum
+                                Exit For
+                            End If
+                        Next
+                        
+                        If i = themeCount Then
+                            themeNums(themeCount) = themeNum
+                        End If
+                        themeCount = themeCount + 1
+                    Next
+                    
+                    For i = 0 To themeCount - 1
+                        cboThemeNumber.AddItem themeNums(i)
+                    Next
+                End If
+            End If
+        End If
+    End If
+End Sub
+
+Private Sub btnAdvanced_Click()
+    If btnAdvanced.Caption Like "*Advanced*" Then
+        btnAdvanced.Caption = "<- Simple"
+        PopulateThemeNumbers
+        frameAdvanced.Enabled = True
+        Height = 6165 'frameAdvanced.Top + frameAdvanced.Height + 28
+    Else
+        Height = 4485 'frameOutput.Top + frameOutput.Height + 28
+        btnAdvanced.Caption = "Advanced ->"
+        cboThemeNumber.ListIndex = 0
+        txtFCode.Text = ""
+        frameAdvanced.Enabled = False
+    End If
+End Sub
+
+Private Sub btnBrowseInput_Click()
+    Dim fopen As FileOpenSaveDialog
+    Set fopen = New FileOpenSaveDialog
+    With fopen
+        .CancelError = False
+        .DefaultExt = "ntx"
+        .DialogTitle = "Open NTX File"
+        .Flags = OFN_FILEMUSTEXIST
+        .InitDir = m_ntxPath
+        .Filter = "NTX Files (*.ntx)|*.ntx"
+        
+        If .ShowOpen Then
+            NTXClose m_hntx
+            btnOK.Enabled = False
+            
+            cboThemeNumber.Clear
+            cboThemeNumber.AddItem "(All)"
+            cboThemeNumber.ListIndex = 0
+            
+            txtFCode.Text = ""
+            chkOutputPoints = False
+            chkOutputLines = False
+            chkOutputPolygons = False
+            chkOutputNames = False
+            txtOutputFolder = ""
+            m_shpBase = ""
+            
+            m_ntxFileName = .FileName
+        
+            m_ntxPath = .FileName
+            
+            m_ntxBase = .FileTitle
+            If m_ntxBase <> "" Then
+                m_ntxPath = Mid(m_ntxPath, 1, Len(m_ntxPath) - Len(m_ntxBase) - 1)
+            End If
+            
+
+            
+            Dim ntxExtIdx As Long
+            ntxExtIdx = InStrRev(m_ntxBase, ".")
+            If ntxExtIdx Then
+                m_ntxExt = Mid(m_ntxBase, ntxExtIdx + 1)
+                m_ntxBase = Mid(m_ntxBase, 1, ntxExtIdx - 1)
+            End If
+            
+            m_hntx = NTXOpen(m_ntxFileName)
+            
+            If NTXIsValid(m_hntx) Then
+                txtInputFile.Text = m_ntxFileName
+                
+                m_shpBase = m_ntxBase
+                
+                chkOutputPoints.Enabled = True
+                chkOutputLines.Enabled = True
+                chkOutputPolygons.Enabled = True
+                chkOutputNames.Enabled = True
+                
+                txtOutputFolder.Enabled = True
+                btnBrowseOutput.Enabled = True
+                
+                txtOutputFolder.Text = m_ntxPath
+                
+                If Not btnAdvanced.Caption Like "*Advanced*" Then
+                    'Already in advanced mode
+                    PopulateThemeNumbers
+                End If
+            Else
+                chkOutputPoints.Enabled = False
+                chkOutputLines.Enabled = False
+                chkOutputPolygons.Enabled = False
+                chkOutputNames.Enabled = False
+                
+                txtOutputFolder.Enabled = False
+                btnBrowseOutput.Enabled = False
+            
+                'm_ntxPath = ""
+                m_ntxExt = ""
+                m_ntxFileName = ""
+                m_ntxBase = ""
+                
+                MsgBox "That doesn't look like an NTX file!", vbExclamation, "NTX Import"
+            End If
+        End If
+    End With
+End Sub
+
+Private Sub btnBrowseOutput_Click()
+    Dim fopen As FileOpenSaveDialog
+    Set fopen = New FileOpenSaveDialog
+    With fopen
+        .CancelError = False
+        .DefaultExt = "shp"
+        .DialogTitle = "Choose folder for output shapefile"
+        .Filter = "Shape file folder|*.shp"
+        .Flags = OFN_PATHMUSTEXIST
+        .InitDir = m_ntxPath
+        
+        If m_ntxBase <> "" Then m_shpBase = m_ntxBase
+        If m_shpBase <> "" Then .FileName = m_shpBase & ".shp"
+        
+        If fopen.ShowSave Then
+            txtOutputFolder.Text = Mid(.FileName, 1, Len(.FileName) - Len(.FileTitle) - 1)
+            
+            If .FileTitle Like "?*.shp" And .FileTitle <> (m_shpBase & ".shp") Then
+                m_shpBase = Left$(.FileTitle, Len(.FileTitle) - 4)
+                If m_shpBase Like "*_[plrn]" Then
+                    If m_shpBase <> m_ntxBase Then
+                        m_shpBase = Left$(m_shpBase, Len(m_shpBase) - 2)
+                    End If
+                End If
+            End If
+        End If
+    End With
+
+
+End Sub
+
+
+'Private Sub cboThemeNumber_Change()
+'End Sub
+
+
+Private Sub cboThemeNumber_Exit(ByVal Cancel As MSForms.ReturnBoolean)
+    If cboThemeNumber.ListIndex < 0 Then
+        If cboThemeNumber.ListCount > 0 Then
+            cboThemeNumber.ListIndex = 0
+        End If
+    End If
+End Sub
+
+Private Sub chkOutputPoints_Click()
+    With txtOutputPoints
+        If chkOutputPoints.Value Then
+            .Text = m_shpBase & "_p"
+            .Enabled = True
+        Else
+            .Text = ""
+            .Enabled = False
+        End If
+    End With
+    UpdateOKButton
+End Sub
+
+Private Sub chkOutputLines_Click()
+    With txtOutputLines
+        If chkOutputLines.Value Then
+            .Text = m_shpBase & "_l"
+            .Enabled = True
+            chk3dLines.Enabled = True
+        Else
+            .Text = ""
+            .Enabled = False
+            chk3dLines.Enabled = False
+        End If
+    End With
+    UpdateOKButton
+End Sub
+
+Private Sub chkOutputPolygons_Click()
+    With txtOutputPolygons
+        If chkOutputPolygons.Value Then
+            .Text = m_shpBase & "_r"
+            .Enabled = True
+        Else
+            .Text = ""
+            .Enabled = False
+        End If
+    End With
+    UpdateOKButton
+End Sub
+
+
+Private Sub chkOutputNames_Click()
+    With txtOutputNames
+        If chkOutputNames.Value Then
+            .Text = m_shpBase & "_n"
+            .Enabled = True
+        Else
+            .Text = ""
+            .Enabled = False
+        End If
+    End With
+    UpdateOKButton
+End Sub
+
+Private Sub btnCancel_Click()
+    Unload Me
+End Sub
+
+Private Sub btnOK_Click()
+    Dim pMxDoc As IMxDocument
+    Dim pMap As IMap
+    
+    Dim pWkspFact As IWorkspaceFactory
+    Set pWkspFact = New ShapefileWorkspaceFactory
+    
+    Dim pFWksp As IFeatureWorkspace
+    Set pFWksp = pWkspFact.OpenFromFile(txtOutputFolder.Text, 0)
+    
+    Dim pFC As IFeatureClass
+    Dim pShapefiles(0 To 3) As IFeatureClass
+    
+    If chkAddToMap Then
+        Set pMxDoc = ThisDocument
+        Set pMap = pMxDoc.ActivatedView
+    End If
+    
+    If IsNumeric(cboThemeNumber.Text) Then
+        NTXSetThemeFilter m_hntx, CLng(cboThemeNumber.Text)
+    Else
+        NTXSetThemeFilter m_hntx, 0
+    End If
+    
+    NTXSetFCodeFilter m_hntx, txtFCode.Text
+    
+    Dim outFile As String, outName As String
+    Dim proceed As Boolean
+    
+    If chkOutputPoints Then
+        outName = txtOutputPoints.Text
+        outFile = txtOutputFolder.Text & "\" & outName & ".shp"
+        proceed = True
+        If Dir(outFile) <> "" Then
+            proceed = MsgBox("Shapefile " & outFile & " already exists.  Overwrite?", vbYesNo, "NTX Import")
+            If Not proceed Then chkOutputPoints = False
+        End If
+            
+        If proceed Then
+            If 0 = NTXConvertPoints(m_hntx, outFile) Then
+                Set pFC = pFWksp.OpenFeatureClass(outName)
+                CreateSpatialIndex pFC
+                Set pShapefiles(1) = pFC
+            End If
+        End If
+        
+        
+    End If
+    
+    If chkOutputLines Then
+        outName = txtOutputLines.Text
+        outFile = txtOutputFolder.Text & "\" & outName & ".shp"
+        proceed = True
+        If Dir(outFile) <> "" Then
+            proceed = MsgBox("Shapefile " & outFile & " already exists.  Overwrite?", vbYesNo, "NTX Import")
+            If Not proceed Then chkOutputLines = False
+        End If
+        
+        If proceed Then
+            Dim ntxLineResult As Long
+            If chk3dLines.Value Then
+                ntxLineResult = NTXConvertLinesZ(m_hntx, outFile)
+            Else
+                ntxLineResult = NTXConvertLines(m_hntx, outFile)
+            End If
+            
+            If 0 = ntxLineResult Then
+                Set pFC = pFWksp.OpenFeatureClass(outName)
+                CreateSpatialIndex pFC
+                Set pShapefiles(2) = pFC
+            End If
+        End If
+    End If
+    
+    If chkOutputPolygons Then
+        outName = txtOutputPolygons.Text
+        outFile = txtOutputFolder.Text & "\" & outName & ".shp"
+        proceed = True
+        If Dir(outFile) <> "" Then
+            proceed = MsgBox("Shapefile " & outFile & " already exists.  Overwrite?", vbYesNo, "NTX Import")
+            If Not proceed Then chkOutputPolygons = False
+        End If
+            
+        If proceed Then
+            If 0 = NTXConvertPolygons(m_hntx, outFile) Then
+                Set pFC = pFWksp.OpenFeatureClass(outName)
+                CreateSpatialIndex pFC
+                Set pShapefiles(3) = pFC
+            End If
+        End If
+    End If
+    
+    If chkOutputNames Then
+        outName = txtOutputNames.Text
+        outFile = txtOutputFolder.Text & "\" & outName & ".shp"
+        proceed = True
+        If Dir(outFile) <> "" Then
+            proceed = MsgBox("Shapefile " & outFile & " already exists.  Overwrite?", vbYesNo, "NTX Import")
+            If Not proceed Then chkOutputNames = False
+        End If
+            
+        If proceed Then
+            If 0 = NTXConvertNames(m_hntx, outFile) Then
+                Set pFC = pFWksp.OpenFeatureClass(outName)
+                CreateSpatialIndex pFC
+                Set pShapefiles(0) = pFC
+            End If
+        End If
+    End If
+    
+    NTXClose m_hntx
+    
+    
+    If chkAddToMap Then
+        Dim shpIdx As Long
+        Dim isDirty As Boolean
+        For shpIdx = 3 To 0 Step -1
+            Set pFC = pShapefiles(shpIdx)
+            
+            If Not pFC Is Nothing Then
+            
+                Dim pLyr As ILayer
+                Dim pFLyr As IFeatureLayer
+                Set pFLyr = New FeatureLayer
+                Set pFLyr.FeatureClass = pFC
+                Set pLyr = pFLyr
+                pLyr.Name = pFC.AliasName
+                
+                pMap.AddLayer pFLyr
+                isDirty = True
+            End If
+        Next
+        
+        If isDirty Then
+            pMxDoc.UpdateContents
+        End If
+    End If
+    
+    Unload Me
+End Sub
+
+
+Private Sub txtInputFile_Enter()
+    btnBrowseInput.SetFocus
+End Sub
+
+Private Sub txtOutputFolder_Change()
+    UpdateOKButton
+End Sub
+
+Private Sub txtOutputFolder_DblClick(ByVal Cancel As MSForms.ReturnBoolean)
+    btnBrowseOutput_Click
+End Sub
+
+Private Sub txtOutputFolder_Enter()
+    btnBrowseOutput.SetFocus
+End Sub
+
+Private Sub UserForm_Initialize()
+    cboThemeNumber.AddItem "(All)"
+    cboThemeNumber.ListIndex = 0
+    btnAdvanced_Click
+    
+    On Error Resume Next
+    If Not TypeOf Application Is IMxApplication Then
+        ' we'll also end up here if Application Is Nothing
+        chkAddToMap.Value = False
+        chkAddToMap.Enabled = False
+    End If
+End Sub
+
+Private Sub UserForm_Terminate()
+    NTXClose m_hntx
+End Sub
